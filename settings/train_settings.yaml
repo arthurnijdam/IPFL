@@ -1,0 +1,17 @@
+---
+experiment_name: "test_adaptive_a4"
+Date: "22_11_2022"
+# Data settings
+Dataset: "MNIST_niid"     # MNIST_NIID or FEMNIST
+n_clients: 10
+total_clients: 10
+classes_per_user: 10
+
+# Training settings
+network: "Net"
+n_epochs: 100
+local_iterations: 1
+type: "afpl" # global, local or federated
+
+# Display settings
+log_interval: 25
