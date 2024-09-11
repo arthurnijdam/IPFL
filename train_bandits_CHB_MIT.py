@@ -625,6 +625,15 @@ class P2P_AFPL():
 
                     param.data += alphas[j] * param2.data  # we add all participating client's models to the one here.
 
+            # Do the same thing for batch norms:
+            sd = zero_copy.state_dict()
+            for key_item_1, key_item_2 in zip(zero_copy.state_dict().items(),
+                                              self.client_models[str(i)].state_dict().items()):
+                if key_item_1[0].endswith('.running_mean') or key_item_1[0].endswith('.running_var'):
+                    if ii == 0:
+                        sd[key_item_1[0]] = torch.zeros(sd[key_item_1[0]].shape).cuda().double()
+                    sd[key_item_1[0]] += alphas[j] * key_item_2[1]
+            zero_copy.load_state_dict(sd)
             j += 1
 
         # self.client_models[str(i)] = zero_copy.double()
@@ -636,7 +645,75 @@ class P2P_AFPL():
         else:
             return zero_copy.double()
 
+
     def federated_averaging(self):
+        shared_model = copy.deepcopy(self.network).cuda()
+        n_clients = len(
+            self.selected_clients)
+        weight = [self.len[str(x)] for x in self.selected_clients] # use this if some clients have more data than others
+        #weight = [1 / n_clients for x in range(len(selected_clients))]
+        weight = weight / np.sum(weight)
+
+        losses = 0
+        losses2 = 0
+
+        print("weights ", weight)
+        for idx, i in enumerate(self.selected_clients):
+            p = 0
+            for (name, param), (name2, param2) in zip(shared_model.named_parameters()
+                    , self.client_models[str(i)].named_parameters()):
+                if idx == 0:
+                    param.data = torch.zeros(param.shape).cuda().double()
+                param.data += weight[idx] * param2.data
+                p += 1
+
+                # Do the same thing for batch norms:
+            sd = shared_model.state_dict()
+            for key_item_1, key_item_2 in zip(shared_model.state_dict().items(),
+                                              self.client_models[str(i)].state_dict().items()):
+                if key_item_1[0].endswith('.running_mean') or key_item_1[0].endswith('.running_var'):
+                    if idx == 0:
+                        sd[key_item_1[0]] = torch.zeros(sd[key_item_1[0]].shape).cuda().double()
+                    sd[key_item_1[0]] += weight[idx] * key_item_2[1]
+            shared_model.load_state_dict(sd)
+
+        self.shared_model = copy.deepcopy(shared_model).double().eval().cuda()
+        for i in self.selected_clients:
+            self.client_models[str(i)] = copy.deepcopy(self.shared_model)  # copy global model to the clients
+            loss_test = 0
+            for batch_idx, (data, target) in enumerate(self.dataloaders_test[str(i)]):
+                data = data.cuda()
+                target = target.type(torch.LongTensor).squeeze(1).cuda()
+                # Forward pass
+                data = torch.reshape(data, (-1, 1, 2 * 1024))
+                output = self.shared_model(data)
+                output = F.log_softmax(output, dim=-1)
+
+                loss_test += F.nll_loss(output, target).detach().cpu().numpy()
+
+            loss_test = loss_test / self.len_test[str(i)]
+            losses += loss_test
+            if loss_test < self.best_test_loss[str(i)]:
+                torch.save(self.client_models[str(i)].state_dict(),
+                           os.path.join(save_dir, 'model', 'best_model' + str(i) + '.pt'))
+                self.best_test_loss[str(i)] = loss_test
+            self.client_models[str(i)].eval()
+            loss_test2 = 0
+            for batch_idx, (data, target) in enumerate(self.dataloaders[str(i)]):
+                data = data.cuda()
+                target = target.type(torch.LongTensor).squeeze(1).cuda()
+                # Forward pass
+                data = torch.reshape(data, (-1, 1, 2 * 1024))
+                output = self.shared_model(data)
+                output = F.log_softmax(output, dim=-1)
+
+                loss_test2 += F.nll_loss(output, target).detach().cpu().numpy()
+
+            loss_test2 = loss_test2 / self.len[str(i)]
+            losses2 += loss_test2
+
+        return losses, losses2
+    def federated_averaging_old(self):
         self.shared_model = copy.deepcopy(self.network).double().cuda()
         n_clients = len(self.selected_clients)
         weight = [self.len[str(x)] for x in self.selected_clients]
@@ -706,6 +783,15 @@ class P2P_AFPL():
                 if idx == 0:
                     param.data = torch.zeros(param.shape).cuda().double()
                 param.data += weight[idx] * param2.data
+
+            sd = self.shared_model.state_dict()
+            for key_item_1, key_item_2 in zip(self.shared_model.state_dict().items(),
+                                              self.client_models[str(i)].state_dict().items()):
+                if key_item_1[0].endswith('.running_mean') or key_item_1[0].endswith('.running_var'):
+                    if idx == 0:
+                        sd[key_item_1[0]] = torch.zeros(sd[key_item_1[0]].shape).cuda().double()
+                    sd[key_item_1[0]] += weight[idx] * key_item_2[1]
+            self.shared_model.load_state_dict(sd)
 
         self.shared_model = self.shared_model.double().eval()
 
@@ -783,6 +869,26 @@ class P2P_AFPL():
                     param.data = torch.zeros(param.shape).cuda().double()
                 param.data += weight[idx] * param2.data  # accumulate local weights
                 param4.data = 0.25 * param4.data + 0.75 * param3.data  # do AFPL local model update: note that we take the previous global model
+
+            sd = self.shared_model.state_dict()
+            for key_item_1, key_item_2 in zip(self.shared_model.state_dict().items(),
+                                              self.client_models_global[str(i)].state_dict().items()):
+                if key_item_1[0].endswith('.running_mean') or key_item_1[0].endswith('.running_var'):
+                    if idx == 0:
+                        sd[key_item_1[0]] = torch.zeros(sd[key_item_1[0]].shape).cuda().double()
+                    sd[key_item_1[0]] += weight[idx] * key_item_2[1]
+            self.shared_model.load_state_dict(sd)
+
+            sd = self.client_models[str(i)].state_dict()
+            for key_item_1, key_item_2 in zip(self.shared_model_old.state_dict().items(),
+                                              self.client_models[str(i)].state_dict().items()):
+                if key_item_1[0].endswith('.running_mean') or key_item_1[0].endswith('.running_var'):
+                    if idx == 0:
+                        sd[key_item_2[0]] = torch.zeros(sd[key_item_2[0]].shape).cuda().double()
+                    sd[key_item_2[0]] = 0.25 * key_item_2[1] + 0.75 * key_item_1[1]
+            self.client_models[str(i)].load_state_dict(sd)
+
+
             self.client_models[str(i)] = self.client_models[str(i)].double()
             self.client_models[str(i)].eval()
             loss_test = 0

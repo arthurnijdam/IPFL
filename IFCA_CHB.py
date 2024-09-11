@@ -291,7 +291,7 @@ class IFCA():
         self.len_really_test = {}
         self.dataloaders_test = {}
         self.dataloaders_really_test = {}
-        filepath = '/mimer/NOBACKUP/groups/naiss2023-22-980/arthur/'
+        filepath = '/mimer/NOBACKUP/groups/naiss2024-22-903/IPFL_data/'
         for idx, i in enumerate(self.patients_left):
             self.client_models[str(idx)] = copy.deepcopy(self.network).double().cuda()
             self.optimizers[str(idx)] = torch.optim.SGD(self.client_models[str(idx)].parameters(), lr=0.01,
@@ -401,7 +401,19 @@ class IFCA():
                             param.data = torch.zeros(param.shape).cuda().double()
                         param.data += weight[idx] * param2.data
 
+                    sd = shared_model.state_dict()
+                    for key_item_1, key_item_2 in zip(shared_model.state_dict().items(),
+                                                      self.client_models[str(i)].state_dict().items()):
+                        if key_item_1[0].endswith('.running_mean') or key_item_1[0].endswith('.running_var'):
+                            if idx == 0:
+                                sd[key_item_1[0]] = torch.zeros(sd[key_item_1[0]].shape).cuda().double()
+                            sd[key_item_1[0]] += weight[idx] * key_item_2[1]
+
+
                 self.global_models_ifca[str(k_i)] = shared_model.double().eval()
+                self.global_models_ifca[str(k_i)].load_state_dict(sd)
+
+
 
     def update_local_models(self ,selected_clients):
         self.dw = {}
