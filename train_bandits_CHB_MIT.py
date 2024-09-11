@@ -5,7 +5,7 @@ from scipy.io import loadmat
 from sklearn.model_selection import train_test_split
 import h5py
 import torch.nn.functional as F
-from torchsummary import summary
+from torchinfo import summary
 
 import torch
 import torchvision
@@ -389,7 +389,7 @@ class P2P_AFPL():
         self.len_really_test = {}
         self.dataloaders_test = {}
         self.dataloaders_really_test = {}
-        filepath = '/mimer/NOBACKUP/groups/snic2022-22-122/arthur/'
+        filepath = '/mimer/NOBACKUP/groups/naiss2024-22-903/IPFL_data/'
 
         if self.test == 'AFPL':
             self.client_models_global = {}

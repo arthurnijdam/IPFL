@@ -1,16 +1,16 @@
 ---
-experiment_name: "MNIST_IFCL_5" 
-Date: "30_06_2023"
+experiment_name: "CHB_federated_1"
+Date: "11_09_24"
 
 # Data settings
-Dataset: "MNIST"     # MNIST_NIID or MIT_BIH
-n_clients: 100
-n_clients_UCB: 1
-seed: 46
+Dataset: "CHB_MIT"     # MNIST_NIID or MIT_BIH
+n_clients: 23
+n_clients_UCB: 23
+seed: 42
 
 # MNIST
 n_classes_total: 4
-n_classes_per_user: 2
+n_classes_per_user: 4
 # MIT-BIH 
 data_fraction: 1
 # AFPL 
@@ -22,7 +22,7 @@ k: 6
 network: "Net"
 n_epochs: 100
 local_iterations: 1
-type: "ifca" # global, local or federated
+type: "federated" # global, local or federated
 
 # Display settings
 calc_accuracy: "True" 
